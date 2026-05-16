@@ -123,26 +123,128 @@
       text-transform: uppercase;
     }
 
-    .field input[type="number"] {
+    .field input[type="text"] {
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       color: var(--text);
       font-family: var(--mono);
-      font-size: 1.25rem;
+      font-size: 1.1rem;
       padding: 12px 16px;
       width: 100%;
       outline: none;
       transition: border-color .2s, box-shadow .2s;
-      -moz-appearance: textfield;
     }
-    .field input[type="number"]::-webkit-inner-spin-button,
-    .field input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
-    .field input[type="number"]:focus {
+    .field input[type="text"]:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(200,240,74,.08);
     }
-    .field input[type="number"]::placeholder { color: var(--muted); }
+    .field input[type="text"]::placeholder { color: var(--muted); }
+
+    /* Results list */
+    .results-list {
+      margin-top: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .result-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: border-color .18s, background .18s;
+      position: relative;
+      overflow: hidden;
+    }
+    .result-item::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: var(--accent);
+      opacity: 0;
+      transition: opacity .18s;
+    }
+    .result-item:hover { border-color: var(--accent); background: rgba(200,240,74,.04); }
+    .result-item:hover::before { opacity: 1; }
+    .result-item.selected { border-color: var(--accent); background: rgba(200,240,74,.06); }
+    .result-item.selected::before { opacity: 1; }
+
+    .result-poster {
+      width: 36px;
+      height: 54px;
+      object-fit: cover;
+      border-radius: 3px;
+      flex-shrink: 0;
+      background: var(--border);
+    }
+    .result-poster-placeholder {
+      width: 36px;
+      height: 54px;
+      border-radius: 3px;
+      flex-shrink: 0;
+      background: var(--border);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: .6rem;
+    }
+
+    .result-info { flex: 1; min-width: 0; }
+    .result-title {
+      font-family: var(--sans);
+      font-weight: 700;
+      font-size: .9rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+    }
+    .result-meta {
+      font-family: var(--mono);
+      font-size: .65rem;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    .result-id {
+      font-family: var(--mono);
+      font-size: .7rem;
+      color: var(--accent);
+      background: rgba(200,240,74,.08);
+      border: 1px solid rgba(200,240,74,.15);
+      border-radius: 4px;
+      padding: 2px 8px;
+      flex-shrink: 0;
+    }
+
+    /* Loading spinner */
+    .spinner {
+      display: none;
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .search-status {
+      font-family: var(--mono);
+      font-size: .7rem;
+      color: var(--muted);
+      margin-top: 12px;
+      letter-spacing: .06em;
+      min-height: 1rem;
+    }
 
     /* URL preview */
     .url-preview {
@@ -311,21 +413,24 @@
   </header>
 
   <div class="panel">
-    <p class="panel-label">// controle de conteúdo</p>
+    <p class="panel-label">// busca de conteúdo</p>
     <div class="input-row">
       <div class="field">
-        <label>ID do conteúdo</label>
+        <label>Nome do filme</label>
         <input
-          id="content-id"
-          type="number"
-          min="1"
-          placeholder="ex: 550"
+          id="search-input"
+          type="text"
+          placeholder="ex: Tropa de Elite"
           autocomplete="off"
         />
       </div>
-      <button class="btn-load" onclick="loadEmbed()">Carregar →</button>
+      <div class="spinner" id="spinner"></div>
+      <button class="btn-load" onclick="searchFilme()">Buscar →</button>
     </div>
-    <div class="url-preview">
+    <div class="search-status" id="search-status"></div>
+    <div class="results-list" id="results-list"></div>
+
+    <div class="url-preview" id="url-preview" style="display:none">
       <span class="url-static">https://myembed.biz/filme/</span><span
         class="url-id" id="url-id-part">___</span>
     </div>
@@ -346,7 +451,7 @@
           <polygon points="23 7 16 12 23 17 23 7"/>
           <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
         </svg>
-        <p>Insira um ID e clique em Carregar</p>
+        <p>Busque um filme e selecione da lista</p>
       </div>
 
       <iframe
@@ -361,48 +466,111 @@
     </div>
   </div>
 
-  <p class="footer-note">BASE URL → https://myembed.biz/filme/{id}</p>
+  <p class="footer-note">WEBHOOK → n8n.srv1272435.hstgr.cloud/webhook/busca-filme · EMBED → myembed.biz/filme/{id}</p>
 
   <script>
-    const input       = document.getElementById('content-id');
-    const urlIdPart   = document.getElementById('url-id-part');
-    const frame       = document.getElementById('embed-frame');
-    const placeholder = document.getElementById('placeholder');
-    const statusDot   = document.getElementById('status-dot');
-    const statusText  = document.getElementById('status-text');
-    const idBadge     = document.getElementById('id-badge');
+    const searchInput  = document.getElementById('search-input');
+    const spinner      = document.getElementById('spinner');
+    const searchStatus = document.getElementById('search-status');
+    const resultsList  = document.getElementById('results-list');
+    const urlPreview   = document.getElementById('url-preview');
+    const urlIdPart    = document.getElementById('url-id-part');
+    const frame        = document.getElementById('embed-frame');
+    const placeholder  = document.getElementById('placeholder');
+    const statusDot    = document.getElementById('status-dot');
+    const statusText   = document.getElementById('status-text');
+    const idBadge      = document.getElementById('id-badge');
 
-    input.addEventListener('input', () => {
-      const val = input.value.trim();
-      urlIdPart.textContent = val !== '' ? val : '___';
+    const WEBHOOK = 'https://n8n.srv1272435.hstgr.cloud/webhook/busca-filme';
+    const POSTER_BASE = 'https://image.tmdb.org/t/p/w92';
+
+    searchInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') searchFilme();
     });
 
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') loadEmbed();
-    });
+    async function searchFilme() {
+      const query = searchInput.value.trim();
+      if (!query) { shake(searchInput); return; }
 
-    function loadEmbed() {
-      const val = input.value.trim();
+      // UI: loading state
+      spinner.style.display = 'block';
+      searchStatus.textContent = 'Buscando...';
+      resultsList.innerHTML = '';
+      urlPreview.style.display = 'none';
 
-      if (!val || isNaN(val) || Number(val) < 1) {
-        shake(input);
-        return;
+      try {
+        const url = `${WEBHOOK}?filme=${encodeURIComponent(query)}`;
+        const res  = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        const results = data.results || [];
+        spinner.style.display = 'none';
+
+        if (results.length === 0) {
+          searchStatus.textContent = 'Nenhum resultado encontrado.';
+          return;
+        }
+
+        searchStatus.textContent = `${results.length} resultado(s) encontrado(s) — selecione um para carregar`;
+        renderResults(results);
+
+      } catch (err) {
+        spinner.style.display = 'none';
+        searchStatus.textContent = `Erro ao buscar: ${err.message}`;
       }
+    }
 
-      const id  = parseInt(val, 10);
+    function renderResults(results) {
+      resultsList.innerHTML = '';
+      results.forEach(movie => {
+        const year = movie.release_date ? movie.release_date.slice(0, 4) : '—';
+        const score = movie.vote_average ? movie.vote_average.toFixed(1) : '—';
+
+        const item = document.createElement('div');
+        item.className = 'result-item';
+        item.setAttribute('data-id', movie.id);
+
+        const posterHTML = movie.poster_path
+          ? `<img class="result-poster" src="${POSTER_BASE}${movie.poster_path}" alt="${movie.title}" loading="lazy" />`
+          : `<div class="result-poster-placeholder">NO IMG</div>`;
+
+        item.innerHTML = `
+          ${posterHTML}
+          <div class="result-info">
+            <div class="result-title">${movie.title}</div>
+            <div class="result-meta">${movie.original_title} · ${year} · ★ ${score}</div>
+          </div>
+          <div class="result-id">#${movie.id}</div>
+        `;
+
+        item.addEventListener('click', () => selectResult(item, movie.id, movie.title));
+        resultsList.appendChild(item);
+      });
+    }
+
+    function selectResult(el, id, title) {
+      // Deselect all
+      document.querySelectorAll('.result-item').forEach(i => i.classList.remove('selected'));
+      el.classList.add('selected');
+
+      // Update URL preview
+      urlIdPart.textContent = id;
+      urlPreview.style.display = 'block';
+
+      // Load iframe
       const url = `https://myembed.biz/filme/${id}`;
-
       frame.src = url;
       placeholder.style.display = 'none';
       frame.classList.add('frame-visible');
 
       statusDot.classList.add('live');
-      statusText.textContent = `CARREGANDO ID ${id}`;
+      statusText.textContent = `CARREGANDO · ${title.toUpperCase()}`;
       idBadge.textContent    = `ID: ${id}`;
       idBadge.style.display  = 'block';
 
       frame.onload = () => {
-        statusText.textContent = `EXIBINDO ID ${id}`;
+        statusText.textContent = `EXIBINDO · ${title.toUpperCase()}`;
       };
     }
 
